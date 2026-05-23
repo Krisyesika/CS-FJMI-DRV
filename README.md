@@ -5,7 +5,7 @@
 
 **CS-FJMI-DRV**: Class-Specific Fuzzy Joint Mutual Information with Dynamic Representative Vectors.
 
-> [Author(s)]. *"CS-FJMI-DRV: ..."*  
+> Krisyesika, Joko Lianto Buliali, Ahmad Saikhu. *"CS-FJMI-DRV: ..."*  
 > DOI: `[to be added upon acceptance]`
 
 ---
