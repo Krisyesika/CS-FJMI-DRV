@@ -27,7 +27,7 @@ CS-FJMI-DRV is a scalable, class-specific fuzzy feature selection method that re
 CS-FJMI-DRV/
 ├── src/
 │   ├── methods/
-│   │   ├── cs_fjmi_drv.py   ← Proposed method (CS-FJMI-DRV v2.1)
+│   │   ├── cs_fjmi_drv.py   ← Proposed method (CS-FJMI-DRV)
 │   │   ├── cmim.py          ← CMIM baseline
 │   │   ├── fh.py            ← FH baseline
 │   │   ├── fjmi.py          ← FJMI baseline
