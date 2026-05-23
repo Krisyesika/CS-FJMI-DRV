@@ -1,5 +1,5 @@
 """
-CS-FJMI-DRV v2.1 — Class-Specific Fuzzy Joint Mutual Information
+CS-FJMI-DRV — Class-Specific Fuzzy Joint Mutual Information
 with Dynamic Representative Vectors.
 
 Key innovations:
@@ -8,7 +8,7 @@ Key innovations:
   - Adaptive stopping rule (relative improvement threshold)
 
 Reference:
-  [Author(s)]. "CS-FJMI-DRV: ..." Knowledge-Based Systems, 2025.
+  Krisyesika, Joko Lianto Buliali, Ahmad Saikhu. "CS-FJMI-DRV: Class-Specific Fuzzy Joint Mutual Information with Dynamic Representative Vectors", 2025.
 """
 import numpy as np
 from collections import Counter
@@ -55,8 +55,6 @@ def fuzzy_mutual_information(rel_f, rel_c):
     return max(0.0, H_f + H_c - H_fc)
 
 
-# UPDATE RM — v2.0 FIX
-
 def update_rm(RM_current, rel_new, iteration, mode='average'):
     """
     Update Representative Matrix berdasarkan mode.
@@ -74,7 +72,7 @@ def update_rm(RM_current, rel_new, iteration, mode='average'):
         raise ValueError(f"RM_MODE tidak dikenal: '{mode}'")
 
 
-# [v2.1] STOPPING RULE FUNCTION
+# STOPPING RULE FUNCTION
 
 def should_stop(best_score, prev_score, stop_mode='adaptive', delta=0.01):
     """
@@ -148,7 +146,7 @@ def generate_dynamic_representatives(X, y, target_class,
     return R, y_R
 
 
-# CS-FJMI-DRV SELECTOR — v2.1 WITH ADAPTIVE STOPPING
+# CS-FJMI-DRV SELECTOR
 
 def cs_fjmi_drv_select(X_train, y_train,
                         n_feats_per_class=10,
@@ -158,12 +156,10 @@ def cs_fjmi_drv_select(X_train, y_train,
                         delta=0.01,
                         verbose=False):
     """
-    CS-FJMI-DRV v2.1: Class-Specific Feature Selection dengan:
+    CS-FJMI-DRV: Class-Specific Feature Selection dengan:
       - DRV (complexity reduction)
       - Average RM accumulation (stability)
       - Adaptive stopping rule (relative improvement threshold)
-
-    [v2.1 PERUBAHAN UTAMA — STOPPING RULE]:
 
     FJMI klasik: if best_score <= prev_score → break
       Ini bekerja karena minimum t-norm → skor monotone decreasing.
@@ -289,15 +285,7 @@ def cs_fjmi_drv_select(X_train, y_train,
                 if verbose: print(f"    [STOP] Tidak ada kandidat di iterasi {iteration}")
                 break
 
-            # [v2.1] ADAPTIVE STOPPING RULE
-            # 
-            # Evaluasi apakah improvement masih signifikan.
-            # Ini menggantikan kondisi best_idx == -1 yang tidak pernah
-            # terpicu di v2.0.
-            #
-            # PENTING: Cek stopping SEBELUM menambahkan fitur ke S.
-            # Jika stopping terpicu, fitur saat ini TIDAK ditambahkan.
-            # 
+
             if should_stop(best_score, prev_score,
                            stop_mode=stop_mode, delta=delta):
                 stop_reason = f'adaptive_stop(delta={delta})' if stop_mode == 'adaptive' \
@@ -354,6 +342,3 @@ def cs_fjmi_drv_select(X_train, y_train,
                   f"fitur | {info['reason']}")
 
     return selected_union, selected_per_class, stop_info
-
-
-# UTILITY FUNCTIONS (tidak berubah dari v2.0)
