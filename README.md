@@ -170,10 +170,10 @@ If you use this code, please cite:
 
 ```bibtex
 @article{cs_fjmi_drv_2025,
-  author    = {[Author(s)]},
+  author    = {Krisyesika, Krisyesika and Buliali, Joko Lianto and Saikhu, Ahmad},
   title     = {{CS-FJMI-DRV}: Class-Specific Fuzzy Joint Mutual Information
                with Dynamic Representative Vectors},
-  journal   = {Knowledge-Based Systems},
+  journal   = {[to be added]},
   year      = {2025},
   doi       = {[to be added]}
 }
@@ -183,7 +183,7 @@ If you use this code, please cite:
 
 ```bibtex
 @software{cs_fjmi_drv_code,
-  author    = {[Author(s)]},
+  author    = {Krisyesika, Krisyesika and Buliali, Joko Lianto and Saikhu, Ahmad},
   title     = {{CS-FJMI-DRV}: Source Code and Experiments},
   year      = {2025},
   publisher = {Zenodo},
