@@ -5,7 +5,7 @@
 
 **CS-FJMI-DRV**: Class-Specific Fuzzy Joint Mutual Information with Dynamic Representative Vectors.
 
-> [Author(s)]. *"CS-FJMI-DRV: ..."* Knowledge-Based Systems, 2025.  
+> [Author(s)]. *"CS-FJMI-DRV: ..."*  
 > DOI: `[to be added upon acceptance]`
 
 ---
