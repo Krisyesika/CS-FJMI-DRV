@@ -1,0 +1,66 @@
+# =============================================================================
+# CS-FJMI-DRV Experiment Configuration
+# =============================================================================
+# All hyperparameters are fixed here for full reproducibility.
+# DO NOT change these values without updating the paper accordingly.
+
+experiment:
+  random_seed: 42
+  n_outer_folds: 5      # Outer CV (StratifiedKFold)
+  n_inner_folds: 3      # Inner CV for hyperparameter tuning (GridSearchCV)
+
+# CS-FJMI-DRV hyperparameters (proposed method)
+cs_fjmi_drv:
+  gamma: 1.0            # Gaussian kernel width (fixed for fair comparison)
+  drv_ratio: 0.05       # Fraction of samples per class → prototypes (5%)
+  drv_k_min: 5          # Minimum number of prototypes per class-side
+  drv_k_max: 50         # Maximum number of prototypes per class-side
+  n_feats_per_class: 10 # Max features selected per class (T_max)
+  rm_mode: "average"    # RM accumulation: 'average' | 'minimum' | 'product'
+  stop_mode: "none"     # Stopping rule: 'none' | 'classic' | 'adaptive'
+  delta: 0.01           # Relative tolerance for adaptive stopping
+
+# Baseline hyperparameters
+baselines:
+  selection_ratio: 0.5  # Fraction of features to select (CMIM, JMI, MIFS, MIM, mRMR, FH)
+  n_bins: 3             # Discretization bins (CMIM, JMI, MIFS, MIM, mRMR)
+  beta_mifs: 0.5        # MIFS redundancy penalty (Battiti 1994)
+  fh_p: 1.0             # Lukasiewicz parameter for FH
+  fh_measure: "luca"    # Entropy measure for FH: 'luca' | 'park'
+  fjmiiv_measure: "luca" # Entropy measure for FJMI-IV
+  fjmiiv_p: 1           # p parameter for FJMI-IV
+
+# Classifiers and hyperparameter search grids
+classifiers:
+  random_forest:
+    n_estimators: [100, 500]
+    class_weight: [null, "balanced"]
+  svm:
+    C: [1, 10]
+    kernel: ["rbf"]
+    class_weight: [null, "balanced"]
+  knn:
+    n_neighbors: [3, 5, 7]
+    weights: ["uniform", "distance"]
+
+# Datasets (place files under data/)
+datasets:
+  # UCI / standard
+  Arrhythmia:   { file: "Arrhythmia2.xlsx",                 target: "class" }
+  Abalone:      { file: "abalone.xlsx",                      target: "class" }
+  Dermatology:  { file: "dermatology.xlsx",                  target: "class" }
+  Ecoli:        { file: "ecoli.xlsx",                        target: "class" }
+  Hayes:        { file: "hayes.xlsx",                        target: "class" }
+  Leaf:         { file: "leaf.xlsx",                         target: "class" }
+  Libras:       { file: "LibrasMovement.xlsx",               target: "class" }
+  Soybean:      { file: "soybeanlarge.xlsx",                 target: "class" }
+  Statlog:      { file: "statlog.xlsx",                      target: "class" }
+  Heart:        { file: "heart_disease.xlsx",                target: "class" }
+  Wine:         { file: "winequality_white.xlsx",            target: "class" }
+  Landsat:      { file: "landsatsatellite.xlsx",             target: "class" }
+  DryBean:      { file: "Dry_Bean_Dataset.xlsx",             target: "class" }
+  Optical:      { file: "optical_recognition.xlsx",          target: "class" }
+  Epileptic:    { file: "Epileptic_Seizure_Recognition.xlsx", target: "class" }
+  # Gene expression (MATLAB format)
+  CLL:          { file: "CLL-SUB-111.mat",                   target: null }
+  Lymphoma:     { file: "lymphoma.mat",                      target: null }

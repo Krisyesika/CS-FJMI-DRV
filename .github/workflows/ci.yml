@@ -1,0 +1,78 @@
+name: Smoke Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.9
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Import check — all methods
+        run: |
+          python -c "
+          from src.methods import (
+              CMIMFeatureSelector, FHFeatureSelector,
+              FJMIFeatureSelector, FJMIIVFeatureSelector, FJMIURFeatureSelector,
+              JMIFeatureSelector, MIFSFeatureSelector, MIMFeatureSelector,
+              MRMRFeatureSelector, cs_fjmi_drv_select,
+          )
+          from src.utils import load_mat_data, calculate_merit, kuncheva_index
+          print('All imports OK')
+          "
+
+      - name: Smoke test — CS-FJMI-DRV on synthetic data
+        run: |
+          python -c "
+          import numpy as np
+          from src.methods import cs_fjmi_drv_select
+
+          np.random.seed(42)
+          X = np.random.rand(60, 20)
+          y = np.array([0]*20 + [1]*20 + [2]*20)
+
+          sel, per_class, stop_info = cs_fjmi_drv_select(X, y, n_feats_per_class=5)
+          print(f'Selected {len(sel)} features: {sel}')
+          assert len(sel) > 0, 'No features selected!'
+          print('CS-FJMI-DRV smoke test PASSED')
+          "
+
+      - name: Smoke test — baselines on synthetic data
+        run: |
+          python -c "
+          import numpy as np
+          from sklearn.preprocessing import LabelEncoder
+          from src.methods import (
+              CMIMFeatureSelector, FHFeatureSelector,
+              JMIFeatureSelector, MIFSFeatureSelector,
+              MIMFeatureSelector, MRMRFeatureSelector,
+          )
+
+          np.random.seed(42)
+          X = np.random.rand(100, 20)
+          y = np.array([0]*50 + [1]*50)
+
+          for Cls in [MIMFeatureSelector, MIFSFeatureSelector,
+                      MRMRFeatureSelector, JMIFeatureSelector,
+                      CMIMFeatureSelector]:
+              sel = Cls(ratio=0.5).fit(X, y).selected_indices_
+              assert len(sel) > 0, f'{Cls.__name__} selected nothing!'
+              print(f'{Cls.__name__}: {len(sel)} features OK')
+
+          fh = FHFeatureSelector(ratio=0.5).fit(X, y)
+          assert len(fh.selected_indices_) > 0
+          print(f'FHFeatureSelector: {len(fh.selected_indices_)} features OK')
+          print('All baseline smoke tests PASSED')
+          "
