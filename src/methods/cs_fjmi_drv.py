@@ -1,9 +1,9 @@
 """
-CS-FJMI-DRV — Class-Specific Fuzzy Joint Mutual Information
+CS-FJMI-DRV - Class-Specific Fuzzy Joint Mutual Information
 with Dynamic Representative Vectors.
 
 Key innovations:
-  - DRV: Dynamic Representative Vectors (O(N×K) vs O(N²))
+  - DRV: Dynamic Representative Vectors (O(N*K) vs O(N^2))
   - Average RM accumulation (stable, non-monotone-aware)
   - Adaptive stopping rule (relative improvement threshold)
 
@@ -25,8 +25,8 @@ DRV_MAX_K = 50
 
 def calculate_fuzzy_relation(feature_vec, reps_vec, gamma=1.0):
     """
-    Gaussian fuzzy similarity: μ(x_i, r_j) = exp(-γ ‖x_i - r_j‖²)
-    Complexity: O(N × K)
+    Gaussian fuzzy similarity: mu(x_i, r_j) = exp(-gamma * ||x_i - r_j||^2)
+    Complexity: O(N x K)
     """
     diff = feature_vec[:, np.newaxis] - reps_vec[np.newaxis, :]
     return np.exp(-gamma * (diff ** 2))
@@ -34,8 +34,9 @@ def calculate_fuzzy_relation(feature_vec, reps_vec, gamma=1.0):
 
 def fuzzy_entropy(relation_matrix):
     """
-    Fuzzy entropy: H(R) = (1/N) Σᵢ log₂(K / |[xᵢ]_R|)
-    Normalisasi K karena equivalence class didefinisikan terhadap K prototypes.
+    Fuzzy entropy: H(R) = (1/N) sum_i log2(K / |[x_i]_R|)
+    K is used as the normalising constant since equivalence classes are
+    defined relative to the K prototypes rather than the full sample.
     """
     N, K = relation_matrix.shape
     equiv_sizes = np.sum(relation_matrix, axis=1)
@@ -47,7 +48,7 @@ def fuzzy_entropy(relation_matrix):
 def fuzzy_mutual_information(rel_f, rel_c):
     """
     Fuzzy Mutual Information: I(F; C) = H(F) + H(C) - H(F,C)
-    Joint relation via minimum t-norm (Gödel).
+    Joint relation via minimum t-norm (Goedel).
     """
     H_f  = fuzzy_entropy(rel_f)
     H_c  = fuzzy_entropy(rel_c)
@@ -57,10 +58,12 @@ def fuzzy_mutual_information(rel_f, rel_c):
 
 def update_rm(RM_current, rel_new, iteration, mode='average'):
     """
-    Update Representative Matrix berdasarkan mode.
-    'average' (DIREKOMENDASIKAN): running average — stabil, proporsional.
-    'minimum' (v1.0 LEGACY): monotone decreasing — bermasalah.
-    'product': gradual decay, intermediate.
+    Update the representative matrix according to the chosen mode.
+
+    'average' (recommended) keeps a running average and stays stable as
+    features are added. 'minimum' is the original FJMI rule and is
+    monotone decreasing, which tends to over-penalise later features.
+    'product' decays gradually and sits between the two.
     """
     if mode == 'minimum':
         return np.minimum(RM_current, rel_new)
@@ -69,60 +72,56 @@ def update_rm(RM_current, rel_new, iteration, mode='average'):
     elif mode == 'product':
         return RM_current * rel_new
     else:
-        raise ValueError(f"RM_MODE tidak dikenal: '{mode}'")
+        raise ValueError(f"Unknown RM mode: '{mode}'")
 
-
-# STOPPING RULE FUNCTION
 
 def should_stop(best_score, prev_score, stop_mode='adaptive', delta=0.01):
     """
-    Evaluasi apakah seleksi fitur harus berhenti.
+    Decide whether feature selection should stop for the current class.
 
-    PERBANDINGAN MODE:
-    ┌──────────────┬──────────────────────────────────────────────────────┐
-    │ stop_mode    │ Kondisi berhenti                                     │
-    ├──────────────┼──────────────────────────────────────────────────────┤
-    │ 'adaptive'   │ best_score < prev_score * (1 - delta)               │
-    │              │ Mengizinkan fluktuasi kecil, cocok untuk average RM  │
-    ├──────────────┼──────────────────────────────────────────────────────┤
-    │ 'classic'    │ best_score <= prev_score                            │
-    │              │ FJMI klasik — terlalu agresif untuk average RM       │
-    ├──────────────┼──────────────────────────────────────────────────────┤
-    │ 'none'       │ Tidak pernah berhenti (return False)                │
-    │              │ Selalu pilih T_max fitur                            │
-    └──────────────┴──────────────────────────────────────────────────────┘
+    'classic' stops as soon as the score fails to improve, which is the
+    rule used by standard FJMI. It assumes scores are monotone decreasing,
+    which only holds for the 'minimum' RM mode. With 'average' RM the
+    score can fluctuate slightly between iterations, so 'classic' tends
+    to stop too early.
+
+    'adaptive' instead stops only once the score drops by more than a
+    relative tolerance `delta`, which tolerates small fluctuations while
+    still catching genuine diminishing returns. This is the default for
+    CS-FJMI-DRV since it always uses average RM accumulation.
+
+    'none' disables early stopping and always selects up to the feature
+    budget T_max.
 
     Args:
-        best_score : float — skor terbaik iterasi saat ini
-        prev_score : float — skor terbaik iterasi sebelumnya
-        stop_mode  : str
-        delta      : float — relative tolerance (hanya untuk 'adaptive')
+        best_score: best candidate score at the current iteration.
+        prev_score: best score from the previous iteration.
+        stop_mode: 'adaptive', 'classic', or 'none'.
+        delta: relative tolerance used only by 'adaptive'.
 
     Returns:
-        bool — True jika harus berhenti
+        True if selection should stop.
     """
     if stop_mode == 'none':
         return False
     elif stop_mode == 'classic':
         return best_score <= prev_score
     elif stop_mode == 'adaptive':
-        # Relative improvement threshold:
-        # Berhenti jika penurunan relatif melebihi delta.
-        # Jika prev_score ≈ 0, gunakan absolute check untuk safety.
+        # If prev_score is ~0 there is nothing meaningful to compare
+        # against, so fall back to an absolute check.
         if prev_score < _EPS:
             return best_score < _EPS
         return best_score < prev_score * (1.0 - delta)
     else:
-        raise ValueError(f"STOP_MODE tidak dikenal: '{stop_mode}'")
+        raise ValueError(f"Unknown stop mode: '{stop_mode}'")
 
-
-# DYNAMIC REPRESENTATIVE VECTORS (DRV)
 
 def generate_dynamic_representatives(X, y, target_class,
                                      ratio=0.05, min_k=5, max_k=50):
     """
-    DRV: Class-conditional clustering → contrastive prototypes.
-    Mengurangi kompleksitas dari O(N²) → O(N×K).
+    Build a small set of class-conditional prototypes via clustering,
+    contrasting the target class against the rest. This is what brings
+    the complexity down from O(N^2) to O(N x K).
     """
     X_pos = X[y == target_class]
     X_neg = X[y != target_class]
@@ -146,8 +145,6 @@ def generate_dynamic_representatives(X, y, target_class,
     return R, y_R
 
 
-# CS-FJMI-DRV SELECTOR
-
 def cs_fjmi_drv_select(X_train, y_train,
                         n_feats_per_class=10,
                         gamma=1.0,
@@ -156,47 +153,38 @@ def cs_fjmi_drv_select(X_train, y_train,
                         delta=0.01,
                         verbose=False):
     """
-    CS-FJMI-DRV: Class-Specific Feature Selection dengan:
-      - DRV (complexity reduction)
-      - Average RM accumulation (stability)
-      - Adaptive stopping rule (relative improvement threshold)
+    Class-specific feature selection combining DRV-based complexity
+    reduction, average RM accumulation, and an adaptive stopping rule.
 
-    FJMI klasik: if best_score <= prev_score → break
-      Ini bekerja karena minimum t-norm → skor monotone decreasing.
-
-    CS-FJMI-DRV (average RM): skor bersifat NON-MONOTONE.
-      Classical stopping terlalu agresif — satu fluktuasi kecil
-      bisa menghentikan seleksi prematur.
-
-    Solusi: Relative improvement threshold
-      if best_score < prev_score * (1 - delta) → break
-      Default delta=0.01 (1%) mengizinkan fluktuasi minor
-      sambil mendeteksi genuine diminishing returns.
+    For each class, features are selected greedily to maximise fuzzy
+    joint mutual information with the class label, using a small set of
+    dynamic representative vectors in place of the full pairwise
+    similarity matrix.
 
     Args:
-        X_train          : (N, d)
-        y_train          : (N,)
-        n_feats_per_class: int — T_max
-        gamma            : float (FIXED = 1.0)
-        rm_mode          : str — 'average'/'minimum'/'product'
-        stop_mode        : str — 'adaptive'/'classic'/'none'   [v2.1]
-        delta            : float — relative tolerance           [v2.1]
-        verbose          : bool
+        X_train: (N, d) feature matrix.
+        y_train: (N,) integer class labels.
+        n_feats_per_class: feature budget T_max per class.
+        gamma: Gaussian kernel width (fixed at 1.0 in the paper).
+        rm_mode: representative matrix update rule, 'average'/'minimum'/'product'.
+        stop_mode: stopping rule, 'adaptive'/'classic'/'none'.
+        delta: relative tolerance used by the adaptive stopping rule.
+        verbose: print per-class selection progress.
 
     Returns:
-        selected_union     : list[int]
-        selected_per_class : dict{int: list[int]}
-        stop_info          : dict — per-class stopping diagnostics [v2.1]
+        selected_union: sorted list of unique selected feature indices.
+        selected_per_class: dict mapping class label to its selected feature indices.
+        stop_info: dict mapping class label to stopping diagnostics.
     """
     X_calc = np.nan_to_num(np.asarray(X_train, dtype=float))
     y      = np.asarray(y_train, dtype=int)
 
-    # Hapus fitur konstan
+    # Drop constant features before scoring anything.
     valid_mask    = np.var(X_calc, axis=0) > 1e-9
     valid_indices = np.where(valid_mask)[0]
 
     if len(valid_indices) == 0:
-        if verbose: print("[WARN] Semua fitur konstan!")
+        if verbose: print("All features are constant, nothing to select.")
         return [0], {c: [0] for c in np.unique(y)}, {}
 
     X_clean    = X_calc[:, valid_indices]
@@ -204,46 +192,46 @@ def cs_fjmi_drv_select(X_train, y_train,
     classes    = np.unique(y)
 
     if verbose:
-        print(f"Fitur valid : {n_features}/{X_calc.shape[1]}")
-        print(f"Kelas       : {classes}")
-        print(f"RM Mode     : {rm_mode} | Stop: {stop_mode} | Delta: {delta}")
+        print(f"Valid features: {n_features}/{X_calc.shape[1]}")
+        print(f"Classes: {classes}")
+        print(f"RM mode: {rm_mode} | Stop mode: {stop_mode} | Delta: {delta}")
 
     selected_per_class = {}
-    stop_info          = {}   # [v2.1] Diagnostics per kelas
+    stop_info          = {}
 
     for c in classes:
-        if verbose: print(f"\n  [Kelas {c}] Memulai seleksi...")
+        if verbose: print(f"\nClass {c}: starting selection")
 
         n_c = np.sum(y == c)
         if n_c < DRV_MIN_K:
-            if verbose: print(f"    [WARN] Hanya {n_c} sampel, fallback ke top-3 variance.")
+            if verbose: print(f"  Only {n_c} samples, falling back to top-3 variance features.")
             top3 = np.argsort(np.var(X_clean, axis=0))[-min(3, n_features):]
             selected_per_class[int(c)] = [valid_indices[i] for i in top3]
             stop_info[int(c)] = {'reason': 'rare_class_fallback', 'iterations': 0}
             continue
 
-        # 1. Generate DRV
+        # Build dynamic representative vectors for this class.
         R, y_R = generate_dynamic_representatives(
             X_clean, y, c, ratio=DRV_RATIO, min_k=DRV_MIN_K, max_k=DRV_MAX_K
         )
         K = R.shape[0]
 
         if verbose:
-            print(f"    DRV: K={K} (pos={int(np.sum(y_R==1))}, neg={int(np.sum(y_R==0))})")
+            print(f"  DRV: K={K} (pos={int(np.sum(y_R==1))}, neg={int(np.sum(y_R==0))})")
 
-        # 2. Label-Induced Class Relation
+        # Label-induced class relation against the representatives.
         y_binary = (y == c).astype(float)
         Rel_C    = np.zeros((len(X_clean), K))
         for j, lj in enumerate(y_R):
             Rel_C[:, j] = (y_binary == lj).astype(float)
 
-        # 3. Precompute Feature Relations
+        # Precompute the fuzzy relation for every feature once.
         Rel_F = [
             calculate_fuzzy_relation(X_clean[:, i], R[:, i], gamma=gamma)
             for i in range(n_features)
         ]
 
-        # 4. Pilih Fitur Pertama: argmax I(F; C)
+        # First feature: the one with the highest standalone MI score.
         first_scores = np.array([fuzzy_mutual_information(Rel_F[i], Rel_C)
                                   for i in range(n_features)])
         best_idx  = int(np.argmax(first_scores))
@@ -251,19 +239,15 @@ def cs_fjmi_drv_select(X_train, y_train,
         S_mask    = np.zeros(n_features, dtype=bool)
         S_mask[best_idx] = True
 
-        # Inisialisasi RM
         RM = Rel_F[best_idx].copy()
 
-        # [v2.1] Inisialisasi stopping rule
-        
-        prev_score   = first_scores[best_idx]  # Skor fitur pertama
-        stop_reason  = 'budget_reached'         # Default: T_max tercapai
+        prev_score   = first_scores[best_idx]
+        stop_reason  = 'budget_reached'
         actual_iters = 1
 
         if verbose:
-            print(f"    Fitur ke-1: idx={best_idx} | score={prev_score:.6f}")
+            print(f"  Feature 1: idx={best_idx} | score={prev_score:.6f}")
 
-        # 5. Iterasi Seleksi
         target_k = min(n_feats_per_class, n_features)
 
         for iteration in range(2, target_k + 1):
@@ -282,40 +266,33 @@ def cs_fjmi_drv_select(X_train, y_train,
 
             if best_cand == -1:
                 stop_reason = 'no_candidate'
-                if verbose: print(f"    [STOP] Tidak ada kandidat di iterasi {iteration}")
+                if verbose: print(f"  Stopping at iteration {iteration}: no candidate features left.")
                 break
-
 
             if should_stop(best_score, prev_score,
                            stop_mode=stop_mode, delta=delta):
                 stop_reason = f'adaptive_stop(delta={delta})' if stop_mode == 'adaptive' \
                               else 'classic_stop'
                 if verbose:
-                    print(f"    [STOP-{stop_mode.upper()}] Iterasi {iteration}: "
-                          f"score={best_score:.6f} < threshold "
+                    print(f"  Stopping ({stop_mode}) at iteration {iteration}: "
+                          f"score={best_score:.6f} below threshold "
                           f"(prev={prev_score:.6f}, "
-                          f"thr={prev_score*(1-delta):.6f})")
+                          f"threshold={prev_score*(1-delta):.6f})")
                 break
 
-            # Fitur lolos stopping check → tambahkan
             S.append(best_cand)
             S_mask[best_cand] = True
             actual_iters = iteration
 
-            # Update RM (average accumulation)
             RM = update_rm(RM, Rel_F[best_cand], iteration=iteration, mode=rm_mode)
-
-            # Update prev_score untuk iterasi berikutnya
             prev_score = best_score
 
             if verbose:
-                print(f"    Iter {iteration}: idx={best_cand} | "
+                print(f"  Iter {iteration}: idx={best_cand} | "
                       f"score={best_score:.6f} | RM_mean={RM.mean():.4f}")
 
-        # Map ke indeks original
         selected_per_class[int(c)] = [valid_indices[i] for i in S]
 
-        # [v2.1] Simpan diagnostics
         stop_info[int(c)] = {
             'reason': stop_reason,
             'iterations': actual_iters,
@@ -325,9 +302,8 @@ def cs_fjmi_drv_select(X_train, y_train,
         }
 
         if verbose:
-            print(f"    Terpilih: {len(S)}/{target_k} fitur | Stop: {stop_reason}")
+            print(f"  Selected {len(S)}/{target_k} features | stop reason: {stop_reason}")
 
-    # Union semua fitur per kelas
     selected_union = sorted(set(
         f for fs in selected_per_class.values() for f in fs
     ))
@@ -335,10 +311,10 @@ def cs_fjmi_drv_select(X_train, y_train,
         selected_union = [int(valid_indices[0])]
 
     if verbose:
-        print(f"\n  [UNION] Total fitur unik: {len(selected_union)}")
-        print(f"  [STOP SUMMARY]")
+        print(f"\nTotal unique features selected: {len(selected_union)}")
+        print("Stop summary:")
         for c_key, info in stop_info.items():
-            print(f"    Kelas {c_key}: {info['features_selected']}/{info['budget']} "
-                  f"fitur | {info['reason']}")
+            print(f"  Class {c_key}: {info['features_selected']}/{info['budget']} "
+                  f"features | {info['reason']}")
 
     return selected_union, selected_per_class, stop_info
