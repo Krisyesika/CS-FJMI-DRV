@@ -1,5 +1,5 @@
 """
-run_all.py — Reproduce all experiments from the paper.
+run_all.py - Reproduce all experiments from the paper.
 
 Usage:
     python experiments/run_all.py                          # Run all methods
@@ -48,7 +48,6 @@ from sklearn.neighbors import KNeighborsClassifier
 from imblearn.metrics import geometric_mean_score
 from imblearn.pipeline import Pipeline as ImbPipeline
 
-# Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.methods import (
@@ -66,14 +65,10 @@ from src.utils import (
 warnings.filterwarnings("ignore")
 
 
-# ── Config ────────────────────────────────────────────────────────────────────
-
 def load_config(path="experiments/config.yaml"):
     with open(path) as f:
         return yaml.safe_load(f)
 
-
-# ── Fixed Column Selector ─────────────────────────────────────────────────────
 
 class FixedColumnSelector(TransformerMixin, BaseEstimator):
     """Selects pre-computed feature indices inside a sklearn Pipeline."""
@@ -89,8 +84,6 @@ class FixedColumnSelector(TransformerMixin, BaseEstimator):
         return X[:, self.idx]
 
 
-# ── Preprocessing ─────────────────────────────────────────────────────────────
-
 def build_preprocessor(X_df, cfg):
     num_cols, cat_cols, _ = detect_column_roles(X_df)
     transformers = [("num", Pipeline([
@@ -104,8 +97,6 @@ def build_preprocessor(X_df, cfg):
         ]), cat_cols))
     return ColumnTransformer(transformers, remainder="drop")
 
-
-# ── Classifiers ───────────────────────────────────────────────────────────────
 
 def build_classifiers(cfg, random_state):
     clf_cfg = cfg["classifiers"]
@@ -139,30 +130,25 @@ def build_classifiers(cfg, random_state):
     }
 
 
-# ── Selector factory ──────────────────────────────────────────────────────────
-
 def get_selector(method_name, cfg):
     b = cfg["baselines"]
-    m = cfg["cs_fjmi_drv"]
-    ratio   = b["selection_ratio"]
-    n_bins  = b["n_bins"]
-    rs      = cfg["experiment"]["random_seed"]
+    ratio  = b["selection_ratio"]
+    n_bins = b["n_bins"]
+    rs     = cfg["experiment"]["random_seed"]
 
     selectors = {
-        "MIM":   MIMFeatureSelector(ratio=ratio, n_bins=n_bins, random_state=rs),
-        "MIFS":  MIFSFeatureSelector(ratio=ratio, n_bins=n_bins, beta=b["beta_mifs"], random_state=rs),
-        "mRMR":  MRMRFeatureSelector(ratio=ratio, n_bins=n_bins, random_state=rs),
-        "JMI":   JMIFeatureSelector(ratio=ratio, n_bins=n_bins, random_state=rs),
-        "CMIM":  CMIMFeatureSelector(ratio=ratio, n_bins=n_bins, random_state=rs),
-        "FH":    FHFeatureSelector(ratio=ratio, p=b["fh_p"], measure=b["fh_measure"], random_state=rs),
-        "FJMI":  FJMIFeatureSelector(random_state=rs),
+        "MIM":      MIMFeatureSelector(ratio=ratio, n_bins=n_bins, random_state=rs),
+        "MIFS":     MIFSFeatureSelector(ratio=ratio, n_bins=n_bins, beta=b["beta_mifs"], random_state=rs),
+        "mRMR":     MRMRFeatureSelector(ratio=ratio, n_bins=n_bins, random_state=rs),
+        "JMI":      JMIFeatureSelector(ratio=ratio, n_bins=n_bins, random_state=rs),
+        "CMIM":     CMIMFeatureSelector(ratio=ratio, n_bins=n_bins, random_state=rs),
+        "FH":       FHFeatureSelector(ratio=ratio, p=b["fh_p"], measure=b["fh_measure"], random_state=rs),
+        "FJMI":     FJMIFeatureSelector(random_state=rs),
         "FJMI-IV":  FJMIIVFeatureSelector(measure=b["fjmiiv_measure"], p=b["fjmiiv_p"], random_state=rs),
         "FJMI-UR":  FJMIURFeatureSelector(random_state=rs),
     }
     return selectors.get(method_name)
 
-
-# ── Main experiment loop ──────────────────────────────────────────────────────
 
 def run_experiment(method_name, cfg, data_dir="data", out_dir="results/tables"):
     rs          = cfg["experiment"]["random_seed"]
@@ -176,10 +162,8 @@ def run_experiment(method_name, cfg, data_dir="data", out_dir="results/tables"):
     timestamp   = datetime.now().strftime("%Y%m%d_%H%M%S")
     output_file = os.path.join(out_dir, f"Result_{method_name}_{timestamp}.xlsx")
 
-    print(f"\n{'='*65}")
-    print(f"  Method : {method_name}")
-    print(f"  Output : {output_file}")
-    print(f"{'='*65}")
+    print(f"\nMethod : {method_name}")
+    print(f"Output : {output_file}\n")
 
     classifiers = build_classifiers(cfg, rs)
     datasets    = cfg["datasets"]
@@ -187,13 +171,12 @@ def run_experiment(method_name, cfg, data_dir="data", out_dir="results/tables"):
     for ds_idx, (ds_name, ds_info) in enumerate(datasets.items(), 1):
         filepath = os.path.join(data_dir, ds_info["file"])
         if not os.path.exists(filepath):
-            print(f"[{ds_idx:02d}/{len(datasets)}] SKIP {ds_name} — file not found: {filepath}")
+            print(f"[{ds_idx:02d}/{len(datasets)}] skip {ds_name}, file not found: {filepath}")
             continue
 
         try:
             print(f"\n[{ds_idx:02d}/{len(datasets)}] {ds_name}")
 
-            # Load data
             if filepath.endswith(".mat"):
                 X_df, y_all = load_mat_data(filepath)
                 removed_summary = "N/A"
@@ -202,7 +185,7 @@ def run_experiment(method_name, cfg, data_dir="data", out_dir="results/tables"):
                 df.columns = df.columns.astype(str)
                 target = ds_info.get("target", "class")
                 if target not in df.columns:
-                    print(f"  Column '{target}' not found. Available: {list(df.columns[:5])}")
+                    print(f"  column '{target}' not found, available: {list(df.columns[:5])}")
                     continue
                 df       = df.replace("?", np.nan).dropna(subset=[target])
                 y_all    = df[target].values
@@ -211,7 +194,7 @@ def run_experiment(method_name, cfg, data_dir="data", out_dir="results/tables"):
                     y_all = LabelEncoder().fit_transform(y_all.astype(str))
 
             if X_df is None or len(np.unique(y_all)) < 2:
-                print("  Invalid data — skipping.")
+                print("  invalid data, skipping.")
                 continue
 
             X_df, y_all, removed_cls = prune_rare_classes(X_df, y_all)
@@ -220,15 +203,13 @@ def run_experiment(method_name, cfg, data_dir="data", out_dir="results/tables"):
             M_raw     = X_df.shape[1]
             n_classes = len(np.unique(y_all))
             n_samples = len(y_all)
-            print(f"  Shape: {X_df.shape} | Classes: {n_classes} | Samples: {n_samples}")
+            print(f"  shape: {X_df.shape}, classes: {n_classes}, samples: {n_samples}")
 
-            # Cross-validation
             cv = StratifiedKFold(n_splits=n_outer, shuffle=True, random_state=rs)
 
             for clf_name, (clf_base, param_grid) in classifiers.items():
                 print(f"  {clf_name}")
 
-                # Metric accumulators
                 accs, f1s_mac, precs_mac, recs_mac = [], [], [], []
                 f1s_w, precs_w, recs_w              = [], [], []
                 bal_accs, gmeans, mccs              = [], [], []
@@ -248,7 +229,9 @@ def run_experiment(method_name, cfg, data_dir="data", out_dir="results/tables"):
                     if sparse.issparse(X_tr_t):
                         X_tr_t = X_tr_t.toarray()
 
-                    # Feature selection
+                    # Feature selection is timed separately from the
+                    # classifier grid search, since FS_Time_Avg is
+                    # reported on its own in the output table.
                     t0_fs = time.time()
                     if is_proposed:
                         sel_idx, _, _ = cs_fjmi_drv_select(
@@ -266,10 +249,11 @@ def run_experiment(method_name, cfg, data_dir="data", out_dir="results/tables"):
                     fs_time = time.time() - t0_fs
                     fs_times.append(fs_time)
 
+                    # Indices are stored 1-based to match how they're
+                    # reported in the dissertation tables.
                     sel_unions.append([int(x) + 1 for x in sel_idx])
                     merits.append(calculate_merit(X_tr_t[:, sel_idx], y_tr) if sel_idx else 0.0)
 
-                    # Classification
                     pipeline = ImbPipeline([
                         ("pre", preprocessor),
                         ("sel", FixedColumnSelector(sel_idx)),
@@ -289,6 +273,11 @@ def run_experiment(method_name, cfg, data_dir="data", out_dir="results/tables"):
                         try:
                             y_prob = final_model.predict_proba(X_te)
                         except Exception:
+                            # predict_proba can fail in several ways
+                            # depending on the calibrated estimator and
+                            # fold contents; any failure here falls back
+                            # to a zero matrix so the fold still
+                            # contributes its other metrics.
                             y_prob = np.zeros((len(y_te), n_classes))
 
                         accs.append(accuracy_score(y_te, y_pred))
@@ -308,6 +297,11 @@ def run_experiment(method_name, cfg, data_dir="data", out_dir="results/tables"):
                             pad = np.zeros((len(y_prob), len(classes_ref) - y_prob.shape[1]))
                             y_prob = np.hstack([y_prob, pad])
 
+                        # ROC/PR AUC can fail in a few different ways on
+                        # folds with a class missing from y_te or a
+                        # degenerate y_prob, so each metric is allowed to
+                        # fail independently rather than dropping the
+                        # whole fold.
                         for lst, fn, kw in [
                             (roc_mac, roc_auc_score, {"average": "macro", "multi_class": "ovr"}),
                             (roc_mic, roc_auc_score, {"average": "micro", "multi_class": "ovr"}),
@@ -319,19 +313,18 @@ def run_experiment(method_name, cfg, data_dir="data", out_dir="results/tables"):
                             except Exception:
                                 lst.append(np.nan)
 
-                        print(f"    Fold {fold_idx}: Acc={accs[-1]*100:.2f}%  "
-                              f"F1={f1s_mac[-1]*100:.2f}%  "
-                              f"Feats={len(sel_idx)}  FS={fs_time:.1f}s")
+                        print(f"    fold {fold_idx}: acc={accs[-1]*100:.2f}%  "
+                              f"f1={f1s_mac[-1]*100:.2f}%  "
+                              f"feats={len(sel_idx)}  fs_time={fs_time:.1f}s")
 
                     except Exception as e:
-                        print(f"    Fold {fold_idx} failed: {e}")
+                        print(f"    fold {fold_idx} failed: {e}")
                         for lst in [accs, precs_mac, recs_mac, f1s_mac, precs_w, recs_w,
                                     f1s_w, bal_accs, gmeans, mccs, roc_mac, roc_mic, pr_mac, pr_mic]:
                             lst.append(np.nan)
 
                     total_times.append(time.time() - t_start)
 
-                # Aggregate
                 def fmt(arr, pct=False):
                     clean = [x for x in arr if not np.isnan(x)]
                     if not clean:
@@ -380,16 +373,12 @@ def run_experiment(method_name, cfg, data_dir="data", out_dir="results/tables"):
 
         except Exception as e:
             import traceback
-            print(f"  ERROR on {ds_name}: {e}")
+            print(f"  error on {ds_name}: {e}")
             traceback.print_exc()
 
-    print(f"\n{'='*65}")
-    print(f"  DONE — {method_name}")
-    print(f"  Output: {output_file}")
-    print(f"{'='*65}\n")
+    print(f"\nDone: {method_name}")
+    print(f"Output: {output_file}\n")
 
-
-# ── Entry point ───────────────────────────────────────────────────────────────
 
 ALL_METHODS = [
     "MIM", "MIFS", "mRMR", "JMI", "CMIM",
@@ -408,7 +397,6 @@ if __name__ == "__main__":
 
     cfg = load_config(args.config)
 
-    # Filter datasets if requested
     if args.dataset:
         all_ds = cfg["datasets"]
         if args.dataset not in all_ds:
