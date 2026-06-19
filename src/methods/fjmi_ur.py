@@ -3,73 +3,78 @@ Feature selection method implementations.
 Each class follows the sklearn BaseEstimator/TransformerMixin interface.
 """
 import numpy as np
+from scipy.spatial.distance import cdist
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.preprocessing import KBinsDiscretizer, LabelEncoder
 from sklearn.metrics import mutual_info_score
 
 class FJMIURFeatureSelector(BaseEstimator, TransformerMixin):
     """
-    FJMIUR Implementation based on Author's Snippet & Paper.
-    Phase 1: ISUR (Instance Selection) to reduce samples to uncertainty region.
-    Phase 2: FJMI with Auto-Threshold on the reduced dataset.
+    FJMI with Uncertainty Region instance selection (FJMI-UR).
+
+    Runs in two phases:
+      1. ISUR: reduce the training set to its uncertainty region by
+         keeping every minority-class sample and only the majority-class
+         samples nearest to them, before any feature scoring happens.
+      2. FJMI with auto-threshold: greedy forward selection on the
+         reduced set, scoring each candidate feature by how much it
+         adds on top of the current selection via fuzzy interaction
+         information, and stopping once that score stops improving.
     """
     def __init__(self, random_state=42):
         self.random_state = random_state
         self.selected_indices_ = []
         self.selected_instance_count_ = 0
 
-    # ISUR Helper Functions
+    # ISUR helpers
+
     def _distfunc(self, X, Y):
         """
-        Calculates distance and selects indices in Y closest to X.
-        Equivalent to: sel_indx = distfunc(mindata, maxdata)
+        For every row in X, find the index of its nearest row in Y
+        (Euclidean distance). Used to pick the majority-class samples
+        closest to each minority-class sample.
         """
-        # cdist computes distance between each pair of the two collections of inputs.
-        # D shape: (len(X), len(Y))
         D = cdist(X, Y, metric='euclidean')
-        # For each x in X (minority), find index of closest y in Y (majority)
-        selected = np.argmin(D, axis=1)
-        return selected
+        return np.argmin(D, axis=1)
 
     def _ISUR(self, X, y):
         """
-        Instance Selection based on Uncertainty Region.
-        Logic: Keep all minority samples. Select nearest majority samples.
+        Instance selection based on the uncertainty region: keep all
+        minority-class samples, and for each one keep its nearest
+        majority-class neighbour. Only meaningful for binary class
+        splits; with more than two classes the smallest class is
+        treated as the minority and everything else as the majority.
         """
         classes = np.unique(y)
         if len(classes) < 2:
-            return X, y # Cannot select if only 1 class
+            return X, y
 
-        # Identify minority class
         class_counts = [np.sum(y == c) for c in classes]
         min_cls_idx = np.argmin(class_counts)
         min_cls_label = classes[min_cls_idx]
 
-        # Split data
         mask_min = (y == min_cls_label)
         X_min = X[mask_min]
         y_min = y[mask_min]
-        
+
         mask_max = ~mask_min
         X_max = X[mask_max]
         y_max = y[mask_max]
 
-        if len(X_max) == 0: return X, y
+        if len(X_max) == 0:
+            return X, y
 
-        # Select majority instances closest to minority instances
-        # "sel_indx = distfunc(mindata[:, :-1], maxdata[:, :-1])"
         sel_indices = self._distfunc(X_min, X_max)
-        
         X_max_sel = X_max[sel_indices]
         y_max_sel = y_max[sel_indices]
 
-        # Combine
         X_new = np.vstack((X_min, X_max_sel))
         y_new = np.hstack((y_min, y_max_sel))
-        
+
         return X_new, y_new
 
-    # FJMI Helper Functions (Same as FJMI)
+    # FJMI helpers (shared logic with the plain FJMI baseline)
+
     def _relation(self, x):
         diff = np.abs(x[:, None] - x[None, :])
         return np.exp(-diff)
@@ -92,113 +97,100 @@ class FJMIURFeatureSelector(BaseEstimator, TransformerMixin):
         return Hx + Hy - Hxy
 
     def _iF_MI(self, relx, rely, relz):
-        # I(f; SN; C) -> Interaction Information
+        """
+        Fuzzy interaction information I(f; SN; C) among a candidate
+        feature, the current selection summary SN, and the class.
+        """
         Hx = self._fuzzy_entropy(relx)
         Hy = self._fuzzy_entropy(rely)
         Hz = self._fuzzy_entropy(relz)
-        
+
         relxy = np.minimum(relx, rely)
         Hxy = self._fuzzy_entropy(relxy)
-        
+
         relxz = np.minimum(relx, relz)
         Hxz = self._fuzzy_entropy(relxz)
-        
+
         relyz = np.minimum(rely, relz)
         Hyz = self._fuzzy_entropy(relyz)
-        
+
         relxyz = np.minimum(np.minimum(relx, rely), relz)
         Hxyz = self._fuzzy_entropy(relxyz)
-        
+
         return (Hx + Hy + Hz + Hxyz) - (Hxy + Hxz + Hyz)
 
     def fit(self, X, y):
-        # 1. Apply ISUR to reduce instances
         X_reduced, y_reduced = self._ISUR(X, y)
         self.selected_instance_count_ = X_reduced.shape[0]
-        
-        # 2. Apply FJMI on reduced data
         self._fjmi_logic(X_reduced, y_reduced)
         return self
 
     def _fjmi_logic(self, X, y):
         n_features = X.shape[1]
-        
-        # Initialization
+
         RS = []
-        FRM = None # SN in snippet
-        current_val = 0.0
+        FRM = None  # running relation summary of the selected features
         best_vals = []
-        
-        # Mask for available features
+
         available = np.ones(n_features, dtype=bool)
-        
-        # Precompute Class Relation
         rel_C = self._decision(y)
-        
-        # --- First Feature Selection (Max I(f; C)) ---
+
+        # First feature: maximise standalone I(f; C).
         max_mi = -np.inf
         first_feature = -1
-        
-        # Loop all features to find first
+
         for i in range(n_features):
             rel_f = self._relation(X[:, i])
             i_cx = self._F_MI(rel_f, rel_C)
             if i_cx > max_mi:
                 max_mi = i_cx
                 first_feature = i
-        
-        if first_feature == -1: # Should not happen unless empty
+
+        if first_feature == -1:
             return
 
         RS.append(first_feature)
         best_vals.append(max_mi)
         available[first_feature] = False
-        
-        # Initialize SN (FRM)
         FRM = self._relation(X[:, first_feature])
-        
-        # --- Forward Selection Loop (Auto Threshold) ---
-        # "for n in range(1, data.shape[1] - 1)"
+
+        # Forward selection with auto-threshold stopping: each round
+        # picks the candidate that maximises I(f; C) + I(SN; C) - I(f; SN; C),
+        # i.e. its individual relevance plus the current selection's
+        # relevance, minus their shared (redundant) information.
         for _ in range(1, n_features):
-            max_IcSNx = -np.inf # Max Gain
+            max_IcSNx = -np.inf
             best_feature_next = -1
-            
+
             candidates = np.where(available)[0]
-            if len(candidates) == 0: break
-            
-            # Constant for this iter: I(SN; C)
+            if len(candidates) == 0:
+                break
+
             I_CSN = self._F_MI(FRM, rel_C)
-            
+
             for i in candidates:
                 rel_f = self._relation(X[:, i])
-                
-                # I(f; SN; C) -> Interaction
                 I_SNxc = self._iF_MI(rel_f, FRM, rel_C)
-                
-                # I(f; C)
                 I_Cx = self._F_MI(rel_f, rel_C)
-                
-                # JRes = I(f;C) + I(SN;C) - I(f;SN;C)
+
                 JRes = I_Cx + I_CSN - I_SNxc
-                
+
                 if JRes > max_IcSNx:
                     max_IcSNx = JRes
                     best_feature_next = i
-            
-            # --- Auto-Threshold Stopping Condition ---
-            # "if max_IcSNx <= best_val[-1]: break"
+
+            # Stop once the best candidate no longer improves on the
+            # previous round's score.
             if max_IcSNx <= best_vals[-1]:
                 break
-                
-            # Update State
+
             RS.append(best_feature_next)
             best_vals.append(max_IcSNx)
             available[best_feature_next] = False
-            
-            # Update SN: "SN = np.minimum(SN, relation(data[:, bestFeature]))"
+
             rel_next = self._relation(X[:, best_feature_next])
             FRM = np.minimum(FRM, rel_next)
-            
+
         self.selected_indices_ = np.array(RS)
 
     def transform(self, X):
