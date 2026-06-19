@@ -56,7 +56,7 @@ CS-FJMI-DRV/
 ## Installation
 
 ```bash
-git clone https://github.com/[your-handle]/CS-FJMI-DRV.git
+git clone https://github.com/krisyesika/CS-FJMI-DRV.git
 cd CS-FJMI-DRV
 pip install -r requirements.txt
 ```
