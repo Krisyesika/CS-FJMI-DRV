@@ -1,6 +1,5 @@
-# =============================================================================
 # CS-FJMI-DRV Experiment Configuration
-# =============================================================================
+
 # All hyperparameters are fixed here for full reproducibility.
 # DO NOT change these values without updating the paper accordingly.
 
